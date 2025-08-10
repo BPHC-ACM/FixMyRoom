@@ -1,6 +1,5 @@
 Welcome to the hostel helpline website for bphc.
 
-
 A web portal for BPHC Hostel Maintenance, allowing students to report and track maintenance issues in their hostel rooms.
 
 ## Features
