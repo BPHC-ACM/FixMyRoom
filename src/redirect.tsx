@@ -9,24 +9,25 @@ export default function RedirectPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    
     const allowedDomain = 'hyderabad.bits-pilani.ac.in';
 
     const handleUserRedirect = async (user: any) => {
       try {
         console.log('Processing user:', user.email);
-        
+
         if (!user?.email || !user.email.endsWith(`@${allowedDomain}`)) {
           console.log('User email not allowed:', user?.email);
           await supabase.auth.signOut();
           navigate('/');
           return;
         }
-        
+
         const emails = await adminEmails();
         console.log('Admin emails:', emails);
         console.log('User email:', user.email);
-        
+
+        setIsProcessing(false);
+
         if (emails.includes(user.email)) {
           console.log('Redirecting to admin dashboard');
           navigate('/AdminDashboard');
@@ -45,14 +46,14 @@ export default function RedirectPage() {
         console.log('Getting session...');
         const { data, error } = await supabase.auth.getSession();
         const session = data.session;
-        
+
         if (error) {
           console.error('Session error:', error);
           setError(`Session error: ${error.message}`);
           navigate('/');
           return;
         }
-        
+
         if (session?.user) {
           console.log('Session found, processing user...');
           await handleUserRedirect(session.user);
@@ -72,7 +73,7 @@ export default function RedirectPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change:', event, session?.user?.email);
-      
+
       if (event === 'SIGNED_IN' && session?.user) {
         await handleUserRedirect(session.user);
       } else if (event === 'SIGNED_OUT') {
