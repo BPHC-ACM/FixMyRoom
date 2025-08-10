@@ -1,4 +1,6 @@
-export default [
-  'f20231187@hyderabad.bits-pilani.ac.in',
-  'f20231291@hyderabad.bits-pilani.ac.in',
-];
+import { supabase } from '../supabaseClient';
+
+export const adminEmails = async () => {
+  const { data } = await supabase.from('admins').select('email_id');
+  return data?.map(a => a.email_id) || [];
+};

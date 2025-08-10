@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import adminEmails from './config/adminEmails';
+import { adminEmails } from './config/adminEmails';
 
 export default function RedirectPage() {
   const navigate = useNavigate();
@@ -17,7 +17,8 @@ export default function RedirectPage() {
         navigate('/');
         return;
       }
-      if (adminEmails.includes(user.email)) {
+      const emails = await adminEmails();
+      if (emails.includes(user.email)) {
         navigate('/AdminDashboard');
       } else {
         navigate('/MaintenancePortal');

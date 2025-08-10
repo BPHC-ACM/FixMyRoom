@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import adminEmails from "./config/adminEmails";
+import { adminEmails } from "./config/adminEmails";
 
 export default function ProtectedRoute({
   children,
@@ -35,7 +35,8 @@ export default function ProtectedRoute({
         return;
       }
 
-      if (adminOnly && !adminEmails.includes(user.email)) {
+      const adminEmailList = await adminEmails();
+      if (adminOnly && !adminEmailList.includes(user.email)) {
         navigate('/MaintenancePortal'); // not admin
         return;
       }
