@@ -11,9 +11,12 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const loginWithGoogle = async () => {
     try {
       setIsLoading(true);
+      setError(null);
       console.log('Starting Google OAuth...');
 
       // Clear any existing auth state to prevent conflicts
@@ -41,12 +44,12 @@ export default function LoginPage() {
 
       if (error) {
         console.error('Login error:', error.message);
-        alert('Login failed: ' + error.message);
+        setError('Login failed: ' + error.message);
         setIsLoading(false);
       }
     } catch (err) {
       console.error('Unexpected error:', err);
-      alert('An unexpected error occurred. Please try again.');
+      setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);
     }
   };
@@ -99,6 +102,12 @@ export default function LoginPage() {
                   resolution status
                 </p>
               </div>
+
+              {error && (
+                <div className='bg-red-50 border border-red-200 rounded-lg p-4 mb-6'>
+                  <p className='text-sm text-red-700'>{error}</p>
+                </div>
+              )}
 
               <Button
                 onClick={loginWithGoogle}

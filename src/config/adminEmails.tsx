@@ -4,11 +4,11 @@ import { supabase } from '../supabaseClient';
 export const adminEmails = async () => {
   const { data, error } = await supabase
     .from('admins')
-    .select('name, email');
+    .select('email');
 
   if (error) {
-    console.error(error);
+    console.error('Error fetching admin emails:', error);
     return [];
   }
-  return data; // [{ name: "John Doe", email: "john@example.com" }, ...]
+  return data?.map((admin: { email: string }) => admin.email) || [];
 };

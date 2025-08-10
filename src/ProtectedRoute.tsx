@@ -38,7 +38,7 @@ export default function ProtectedRoute({
       const adminEmailList = await adminEmails();
       if (
         adminOnly &&
-        !adminEmailList.some((admin: { email: string }) => admin.email === user.email)
+        !adminEmailList.includes(user.email)
       ) {
         navigate('/MaintenancePortal'); // not admin
         return;
