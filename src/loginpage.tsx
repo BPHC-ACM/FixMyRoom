@@ -17,16 +17,19 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
       setError(null);
-      console.log('Starting Google OAuth...');
+      console.log('🚀 Starting Google OAuth login...');
 
       // Clear any existing auth state to prevent conflicts
+      console.log('🧹 Clearing existing auth state...');
       await supabase.auth.signOut();
+      console.log('✅ Auth state cleared');
 
       // Use configured redirect URL or fallback to current origin
       const redirectTo =
         import.meta.env.VITE_REDIRECT_URL ||
         `${window.location.origin}/redirect`;
-      console.log('Redirect URL:', redirectTo);
+      console.log('🔗 Redirect URL:', redirectTo);
+      console.log('🏫 Domain restriction: hyderabad.bits-pilani.ac.in');
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -40,15 +43,20 @@ export default function LoginPage() {
         },
       });
 
-      console.log('OAuth response:', data, error);
+      console.log('📋 OAuth response data:', data);
+      console.log('❌ OAuth response error:', error);
 
       if (error) {
-        console.error('Login error:', error.message);
+        console.error('💥 Login error:', error.message);
         setError('Login failed: ' + error.message);
         setIsLoading(false);
+      } else {
+        console.log(
+          '✅ OAuth initiated successfully, redirecting to Google...'
+        );
       }
     } catch (err) {
-      console.error('Unexpected error:', err);
+      console.error('💥 Unexpected error during login:', err);
       setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);
     }

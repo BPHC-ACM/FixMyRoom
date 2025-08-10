@@ -13,70 +13,80 @@ export default function RedirectPage() {
 
     const handleUserRedirect = async (user: any) => {
       try {
-        console.log('Processing user:', user.email);
+        console.log('🚀 Starting handleUserRedirect for user:', user.email);
 
         if (!user?.email || !user.email.endsWith(`@${allowedDomain}`)) {
-          console.log('User email not allowed:', user?.email);
+          console.log('❌ User email not allowed:', user?.email);
           await supabase.auth.signOut();
+          console.log('🔐 Signed out user and redirecting to login');
           navigate('/');
           return;
         }
 
+        console.log('✅ User email domain is valid');
         const emails = await adminEmails();
-        console.log('Admin emails:', emails);
-        console.log('User email:', user.email);
+        console.log('🔍 Checking if user is admin...');
+        console.log('👤 User email:', user.email);
+        console.log('👑 Admin emails:', emails);
+
+        const isAdmin = emails.includes(user.email);
+        console.log('🎯 Is user an admin?', isAdmin);
 
         setIsProcessing(false);
+        console.log('✅ Set processing to false');
 
-        if (emails.includes(user.email)) {
-          console.log('Redirecting to admin dashboard');
+        if (isAdmin) {
+          console.log('🔑 Redirecting to admin dashboard');
           navigate('/AdminDashboard');
         } else {
-          console.log('Redirecting to maintenance portal');
+          console.log('👨‍🎓 Redirecting to maintenance portal');
           navigate('/MaintenancePortal');
         }
       } catch (err) {
-        console.error('Error in handleUserRedirect:', err);
+        console.error('💥 Error in handleUserRedirect:', err);
         setError('Failed to process user authentication');
+        setIsProcessing(false);
       }
     };
 
     const tryGetSession = async () => {
       try {
-        console.log('Getting session...');
+        console.log('🔄 Getting session...');
         const { data, error } = await supabase.auth.getSession();
         const session = data.session;
 
         if (error) {
-          console.error('Session error:', error);
+          console.error('❌ Session error:', error);
           setError(`Session error: ${error.message}`);
           navigate('/');
           return;
         }
 
         if (session?.user) {
-          console.log('Session found, processing user...');
+          console.log('✅ Session found, processing user...');
           await handleUserRedirect(session.user);
         } else {
-          console.log('No session found, waiting for auth state change...');
-          // Don't redirect immediately, wait for auth state change
+          console.log('⏳ No session found, waiting for auth state change...');
         }
       } catch (err) {
-        console.error('Error getting session:', err);
+        console.error('💥 Error getting session:', err);
         setError('Failed to get session');
       }
     };
 
+    console.log('🎯 Starting redirect page initialization');
     tryGetSession();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event, session?.user?.email);
+      console.log('🔄 Auth state change:', event, session?.user?.email);
 
       if (event === 'SIGNED_IN' && session?.user) {
+        console.log('✅ SIGNED_IN event - processing user');
         await handleUserRedirect(session.user);
       } else if (event === 'SIGNED_OUT') {
+        console.log('🔐 SIGNED_OUT event - redirecting to login');
         navigate('/');
       }
     });
@@ -84,12 +94,13 @@ export default function RedirectPage() {
     // Set a timeout to show error if nothing happens
     const timeout = setTimeout(() => {
       if (isProcessing) {
-        console.log('Timeout reached, no authentication completed');
+        console.log('⏰ Timeout reached, no authentication completed');
         setError('Authentication timeout. Please try again.');
       }
     }, 10000); // 10 seconds timeout
 
     return () => {
+      console.log('🧹 Cleaning up redirect page');
       subscription.unsubscribe();
       clearTimeout(timeout);
     };
