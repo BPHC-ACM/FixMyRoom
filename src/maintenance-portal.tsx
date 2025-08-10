@@ -27,7 +27,7 @@ import {supabase} from "./supabaseClient"
 
 
 export default function MaintenancePortal() {
-    // Form state
+    
     const [currentStep, setCurrentStep] = useState(1)
     const [formData, setFormData] = useState({
         name: "",
@@ -51,11 +51,11 @@ export default function MaintenancePortal() {
     
     useEffect(() => {
         (async () => {
-            const { data: { user } } = await supabase.auth.getUser();  // Get logged-in user from Supabase
+            const { data: { user } } = await supabase.auth.getUser();  
             if (user) {
                 setUserDetails({
-                    name: user.user_metadata.name || '',  // Set full name
-                    email: user.email || ''  // Set email address
+                    name: user.user_metadata.name || '',  
+                    email: user.email || ''  
                 });
                 setFormData(prev => ({
                     ...prev,
@@ -65,19 +65,19 @@ export default function MaintenancePortal() {
             }
         })();
     }, []);
-    // Image preview state
+    
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [hasImage, setHasImage] = useState(false)
     
-    // Loading and success states
+    
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
     const [requestId, setRequestId] = useState("")
 
-    // Refs
+    
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    // Handle input changes
+    
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target
 
@@ -95,7 +95,7 @@ export default function MaintenancePortal() {
         }
     }
 
-    // Handle category selection
+    
     const handleCategorySelect = (category: string) => {
         setFormData({
             ...formData,
@@ -103,7 +103,7 @@ export default function MaintenancePortal() {
         })
     }
 
-    // Handle priority selection
+    
     const handlePrioritySelect = (priority: string) => {
         setFormData({
             ...formData,
@@ -111,7 +111,7 @@ export default function MaintenancePortal() {
         })
     }
 
-    // Handle image upload
+    
     const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0]
@@ -128,9 +128,9 @@ export default function MaintenancePortal() {
         }
     }
 
-    // Form navigation
+    
     const nextStep = () => {
-        // Basic validation
+        
         if (currentStep === 1) {
             if ( !formData.building || !formData.roomNo) {
                 alert("Please fill in all required fields")
@@ -152,7 +152,7 @@ export default function MaintenancePortal() {
         setCurrentStep(currentStep - 1)
     }
 
-    // Form submission
+    
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
     
@@ -165,7 +165,7 @@ export default function MaintenancePortal() {
     
         try {
             const { data, error } = await supabase
-                .from('maintenance_requests') // Replace with actual table name
+                .from('maintenance_requests') 
                 .insert([
                     {
                         name: userDetails.name,
@@ -192,16 +192,16 @@ export default function MaintenancePortal() {
             }
     
             alert("Form submitted successfully!");
-            // Optional: reset form or navigate somewhere
+            
         } catch (err) {
             console.error("Unexpected error:", err);
             alert("Something went wrong!");
         } finally {
-            setIsSubmitting(false); // ✅ This is the key to stop the spinner
+            setIsSubmitting(false); 
         }
     };
     
-    // Reset form
+    
     const resetForm = () => {
         setFormData({
             name: "",
@@ -223,7 +223,7 @@ export default function MaintenancePortal() {
     }
     
 
-    // Get building name from value
+    
     const getBuildingName = () => {
         if (!formData.building) return "-"
         const buildings: Record<string, string> = {
@@ -241,7 +241,7 @@ export default function MaintenancePortal() {
         return buildings[formData.building] || "-"
     }
 
-    // Get category name from value
+    
     const getCategoryName = () => {
         if (!formData.category) return "-"
         const categories: Record<string, string> = {
@@ -252,7 +252,7 @@ export default function MaintenancePortal() {
         return categories[formData.category] || "-"
     }
 
-    // Get priority name from value
+    
     const getPriorityName = () => {
         if (!formData.priority) return "Low"
         const priorities: Record<string, string> = {
@@ -263,7 +263,7 @@ export default function MaintenancePortal() {
         return priorities[formData.priority] || "Low"
     }
 
-    // Get visit time name from value
+    
     const getVisitTimeName = () => {
         if (!formData.visitTime) return "-"
         const visitTimes: Record<string, string> = {
@@ -400,7 +400,7 @@ export default function MaintenancePortal() {
                                             value={formData.phone}
                                             onChange={(e) => {
                                                 const value = e.target.value;
-                                                // Allow only digits and max 10 characters
+                                                
                                                 if (/^\d{0,10}$/.test(value)) {
                                                 handleInputChange(e);
                                                 }

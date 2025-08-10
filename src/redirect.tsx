@@ -10,36 +10,28 @@ export default function RedirectPage() {
 
   useEffect(() => {
     const allowedDomain = 'hyderabad.bits-pilani.ac.in';
-
+    let hasHandledRedirect = false;
     const handleUserRedirect = async (user: any) => {
-      try {
-        console.log('🚀 Starting handleUserRedirect for user:', user.email);
+      if (hasHandledRedirect) return;
+      hasHandledRedirect = true;
 
+      try {
         if (!user?.email || !user.email.endsWith(`@${allowedDomain}`)) {
-          console.log('❌ User email not allowed:', user?.email);
           await supabase.auth.signOut();
-          console.log('🔐 Signed out user and redirecting to login');
+
           navigate('/');
           return;
         }
 
-        console.log('✅ User email domain is valid');
         const emails = await adminEmails();
-        console.log('🔍 Checking if user is admin...');
-        console.log('👤 User email:', user.email);
-        console.log('👑 Admin emails:', emails);
 
         const isAdmin = emails.includes(user.email);
-        console.log('🎯 Is user an admin?', isAdmin);
 
         setIsProcessing(false);
-        console.log('✅ Set processing to false');
 
         if (isAdmin) {
-          console.log('🔑 Redirecting to admin dashboard');
           navigate('/AdminDashboard');
         } else {
-          console.log('👨‍🎓 Redirecting to maintenance portal');
           navigate('/MaintenancePortal');
         }
       } catch (err) {
@@ -49,62 +41,27 @@ export default function RedirectPage() {
       }
     };
 
-    const tryGetSession = async () => {
-      try {
-        console.log('🔄 Getting session...');
-        const { data, error } = await supabase.auth.getSession();
-        const session = data.session;
-
-        if (error) {
-          console.error('❌ Session error:', error);
-          setError(`Session error: ${error.message}`);
-          navigate('/');
-          return;
-        }
-
-        if (session?.user) {
-          console.log('✅ Session found, processing user...');
-          await handleUserRedirect(session.user);
-        } else {
-          console.log('⏳ No session found, waiting for auth state change...');
-        }
-      } catch (err) {
-        console.error('💥 Error getting session:', err);
-        setError('Failed to get session');
-      }
-    };
-
-    console.log('🎯 Starting redirect page initialization');
-    tryGetSession();
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state change:', event, session?.user?.email);
-
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('✅ SIGNED_IN event - processing user');
+      if (session?.user) {
         await handleUserRedirect(session.user);
       } else if (event === 'SIGNED_OUT') {
-        console.log('🔐 SIGNED_OUT event - redirecting to login');
         navigate('/');
       }
     });
 
-    // Set a timeout to show error if nothing happens
     const timeout = setTimeout(() => {
       if (isProcessing) {
-        console.log('⏰ Timeout reached, no authentication completed');
         setError('Authentication timeout. Please try again.');
       }
-    }, 10000); // 10 seconds timeout
+    }, 10000);
 
     return () => {
-      console.log('🧹 Cleaning up redirect page');
       subscription.unsubscribe();
       clearTimeout(timeout);
     };
-  }, [navigate, isProcessing]);
+  }, [navigate]);
 
   if (error) {
     return (
