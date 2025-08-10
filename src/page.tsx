@@ -94,6 +94,38 @@ useEffect(() => {
       else setRequests(data || []);
     });
 }, []);
+const [adminName, setAdminName] = useState<string | null>(null);
+const [user, setUser] = useState<{ email: string } | null>(null);
+
+useEffect(() => {
+        // Fetch current user from Supabase auth
+        const fetchUser = async () => {
+            const { data, error } = await supabase.auth.getUser();
+            if (!error && data?.user) {
+                setUser({ email: data.user.email ?? "" });
+            }
+        };
+        fetchUser();
+    }, []);
+
+useEffect(() => {
+        const fetchAdminName = async () => {
+            if (!user?.email) return;
+            const { data, error } = await supabase
+                .from('admins') // table name
+                .select('name')
+                .eq('email_id', user.email) // your actual email column
+                .single();
+
+            if (!error && data) {
+                setAdminName(data.name);
+            }
+        };
+
+        if (user?.email) {
+            fetchAdminName();
+        }
+    }, [user?.email]);
 
 
     const [selectedRequest, setSelectedRequest] = useState<MaintenanceRequest | null>(null)
@@ -413,7 +445,7 @@ const handlePrint = (request: MaintenanceRequest) => {
                         </div>
                         <div className="flex items-center space-x-4">
                             <div className="hidden md:flex items-center space-x-2">
-                                <span>Admin User</span>
+                                <span>{adminName}</span>
                                 <Avatar className="h-8 w-8">
                                     <AvatarImage src="/placeholder.svg" alt="Admin" />
                                     <AvatarFallback>AD</AvatarFallback>

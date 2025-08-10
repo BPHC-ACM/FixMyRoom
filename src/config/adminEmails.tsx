@@ -1,6 +1,14 @@
+// src/config/adminEmails.ts
 import { supabase } from '../supabaseClient';
 
 export const adminEmails = async () => {
-  const { data } = await supabase.from('admins').select('email_id');
-  return data?.map(a => a.email_id) || [];
+  const { data, error } = await supabase
+    .from('admins')
+    .select('name, email');
+
+  if (error) {
+    console.error(error);
+    return [];
+  }
+  return data; // [{ name: "John Doe", email: "john@example.com" }, ...]
 };
