@@ -23,7 +23,7 @@ import {
     PenToolIcon as Tool,
 } from "lucide-react"
 import { Card, CardContent } from "./components/card"
-import {supabase} from "./supabaseClient"
+import { supabase } from "./supabaseClient"
 
 
 export default function MaintenancePortal() {
@@ -31,7 +31,7 @@ export default function MaintenancePortal() {
     const [currentStep, setCurrentStep] = useState(1)
     const [formData, setFormData] = useState({
         name: "",
-        
+
         email: "",
         phone: "",
         building: "",
@@ -42,13 +42,13 @@ export default function MaintenancePortal() {
         visitTime: "",
         termsCheck: false,
     })
-    
+
     const [userDetails, setUserDetails] = useState({
         name: '',
         email: ''
-      });
-    
-    
+    });
+
+
     useEffect(() => {
         (async () => {
             const { data: { user } } = await supabase.auth.getUser();  // Get logged-in user from Supabase
@@ -68,7 +68,7 @@ export default function MaintenancePortal() {
     // Image preview state
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [hasImage, setHasImage] = useState(false)
-    
+
     // Loading and success states
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
@@ -132,7 +132,7 @@ export default function MaintenancePortal() {
     const nextStep = () => {
         // Basic validation
         if (currentStep === 1) {
-            if ( !formData.building || !formData.roomNo) {
+            if (!formData.building || !formData.roomNo) {
                 alert("Please fill in all required fields")
                 return
             }
@@ -155,43 +155,52 @@ export default function MaintenancePortal() {
     // Form submission
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-    
+
         if (!formData.termsCheck) {
             alert("Please accept the terms to continue");
             return;
         }
-    
+
         setIsSubmitting(true);
-    
+
         try {
+            // Get the current user
+            const { data: { user } } = await supabase.auth.getUser();
+
             const { data, error } = await supabase
-                .from('maintenance_requests') // Replace with actual table name
+                .from('maintenance_requests')
                 .insert([
                     {
+                        user_id: user?.id, // Add user_id for RLS
                         name: userDetails.name,
                         email: userDetails.email,
                         phone: formData.phone,
                         building: formData.building,
-                        roomNo: formData.roomNo,  
+                        roomNo: formData.roomNo,
                         category: formData.category,
                         problem: formData.problem,
                         priority: formData.priority,
                         visitTime: formData.visitTime,
                         termsCheck: formData.termsCheck,
-                        
-                        
-
-                        
+                        status: 'pending',
+                        createdAt: new Date().toISOString(),
+                        isDeleted: false
                     }
-                ]);
-    
+                ])
+                .select(); // Add select() to get the inserted record back
+
             if (error) {
                 console.error("Supabase error details:", error);
-    alert(`Error: ${error.message}`);
-    return;
+                alert(`Error: ${error.message}`);
+                return;
             }
-    
-            alert("Form submitted successfully!");
+
+            if (data && data.length > 0) {
+                setRequestId(data[0].id || 'Unknown');
+                setShowSuccess(true);
+            }
+
+            console.log("Form submitted successfully:", data);
             // Optional: reset form or navigate somewhere
         } catch (err) {
             console.error("Unexpected error:", err);
@@ -200,12 +209,12 @@ export default function MaintenancePortal() {
             setIsSubmitting(false); // ✅ This is the key to stop the spinner
         }
     };
-    
+
     // Reset form
     const resetForm = () => {
         setFormData({
             name: "",
-            
+
             email: "",
             phone: "",
             building: "",
@@ -221,7 +230,7 @@ export default function MaintenancePortal() {
         setCurrentStep(1)
         setShowSuccess(false)
     }
-    
+
 
     // Get building name from value
     const getBuildingName = () => {
@@ -278,16 +287,16 @@ export default function MaintenancePortal() {
     }
 
     return (
-        
+
         <div className="min-h-screen flex items-center justify-center p-6 bg-gray-100 bg-[url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27100%27 height=%27100%27 viewBox=%270 0 100 100%27%3E%3Cg fillRule=%27evenodd%27%3E%3Cg fill=%27%233b82f6%27 fillOpacity=%270.05%27%3E%3Cpath opacity=%27.5%27 d=%27M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9zm-1 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9z%27/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')]">
-                    <Card className="w-full max-w-3xl shadow-2xl animate-fade-in bg-white/95 rounded-2xl border border-gray-200/50">
+            <Card className="w-full max-w-3xl shadow-2xl animate-fade-in bg-white/95 rounded-2xl border border-gray-200/50">
                 <div className="relative bg-gradient-to-r from-blue-500 to-blue-700 p-8 text-white rounded-t-2xl overflow-hidden">
                     <div className="flex items-center justify-center mb-3">
                         <Building className="w-8 h-8 mr-3" />
                         <h1 className="text-3xl font-bold">FixMyRoom | Hostel Helpline</h1>
-                        
+
                     </div>
-                    
+
 
                     <p className="text-center text-blue-100 mt-1 text-lg">Submit your maintenance issues for prompt resolution</p>
                     <div className="absolute bottom-0 left-0 w-full overflow-hidden" style={{ height: "40px" }}>
@@ -311,10 +320,10 @@ export default function MaintenancePortal() {
                             >
                                 <div
                                     className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${step === currentStep
-                                            ? "bg-blue-500 text-white"
-                                            : step < currentStep
-                                                ? "bg-green-500 text-white"
-                                                : "bg-gray-200"
+                                        ? "bg-blue-500 text-white"
+                                        : step < currentStep
+                                            ? "bg-green-500 text-white"
+                                            : "bg-gray-200"
                                         }`}
                                 >
                                     {step < currentStep ? <Check className="w-4 h-4" /> : step}
@@ -354,13 +363,13 @@ export default function MaintenancePortal() {
                                                 name="name"
                                                 required
                                                 value={userDetails.name}
-                                                
+
                                                 onChange={handleInputChange}
                                                 className="w-full pl-10 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 transition-all duration-300 focus:outline-none"
                                                 placeholder="Enter your full name"
                                             />
                                         </div>
-                                        
+
                                     </div>
 
                                     {/* Email Field */}
@@ -378,7 +387,7 @@ export default function MaintenancePortal() {
                                                 name="email"
                                                 required
                                                 value={userDetails.email}
-                                                
+
                                                 onChange={handleInputChange}
                                                 className="w-full pl-10 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 transition-all duration-300 focus:outline-none"
                                                 placeholder="Enter your email address"
@@ -396,20 +405,20 @@ export default function MaintenancePortal() {
                                                 <Phone className="w-5 h-5 text-gray-400" />
                                             </div>
                                             <input
-                                            type="tel"
-                                            id="phone"
-                                            name="phone"
-                                            value={formData.phone}
-                                            onChange={(e) => {
-                                                const value = e.target.value;
-                                                // Allow only digits and max 10 characters
-                                                if (/^\d{0,10}$/.test(value)) {
-                                                handleInputChange(e);
-                                                }
-                                            }}
-                                            className="w-full pl-10 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 transition-all duration-300 focus:outline-none"
-                                            placeholder="Enter your 10-digit phone number"
-                                            maxLength={10}
+                                                type="tel"
+                                                id="phone"
+                                                name="phone"
+                                                value={formData.phone}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    // Allow only digits and max 10 characters
+                                                    if (/^\d{0,10}$/.test(value)) {
+                                                        handleInputChange(e);
+                                                    }
+                                                }}
+                                                className="w-full pl-10 pr-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 transition-all duration-300 focus:outline-none"
+                                                placeholder="Enter your 10-digit phone number"
+                                                maxLength={10}
                                             />
 
                                         </div>
@@ -499,8 +508,8 @@ export default function MaintenancePortal() {
                                     {/* Electricity Card */}
                                     <div
                                         className={`p-4 rounded-lg bg-white shadow-md hover:shadow-lg flex flex-col items-center cursor-pointer hover:translate-y-[-5px] transition-all duration-300 ${formData.category === "electricity"
-                                                ? "border-2 border-blue-500 bg-blue-50"
-                                                : "border-2 border-transparent"
+                                            ? "border-2 border-blue-500 bg-blue-50"
+                                            : "border-2 border-transparent"
                                             }`}
                                         onClick={() => handleCategorySelect("electricity")}
                                     >
@@ -514,8 +523,8 @@ export default function MaintenancePortal() {
                                     {/* Plumbing Card */}
                                     <div
                                         className={`p-4 rounded-lg bg-white shadow-md hover:shadow-lg flex flex-col items-center cursor-pointer hover:translate-y-[-5px] transition-all duration-300 ${formData.category === "plumbing"
-                                                ? "border-2 border-blue-500 bg-blue-50"
-                                                : "border-2 border-transparent"
+                                            ? "border-2 border-blue-500 bg-blue-50"
+                                            : "border-2 border-transparent"
                                             }`}
                                         onClick={() => handleCategorySelect("plumbing")}
                                     >
@@ -529,8 +538,8 @@ export default function MaintenancePortal() {
                                     {/* Carpentry Card */}
                                     <div
                                         className={`p-4 rounded-lg bg-white shadow-md hover:shadow-lg flex flex-col items-center cursor-pointer hover:translate-y-[-5px] transition-all duration-300 ${formData.category === "carpentry"
-                                                ? "border-2 border-blue-500 bg-blue-50"
-                                                : "border-2 border-transparent"
+                                            ? "border-2 border-blue-500 bg-blue-50"
+                                            : "border-2 border-transparent"
                                             }`}
                                         onClick={() => handleCategorySelect("carpentry")}
                                     >
@@ -576,8 +585,8 @@ export default function MaintenancePortal() {
                                                 key={priority}
                                                 onClick={() => handlePrioritySelect(priority)}
                                                 className={`inline-flex items-center px-4 py-2 rounded-full border-2 cursor-pointer hover:bg-gray-100 transition-all duration-300 ${formData.priority === priority
-                                                        ? "bg-blue-100 border-blue-400 text-blue-700"
-                                                        : "border-gray-300 text-gray-600"
+                                                    ? "bg-blue-100 border-blue-400 text-blue-700"
+                                                    : "border-gray-300 text-gray-600"
                                                     }`}
                                             >
                                                 <Clock className="w-4 h-4 mr-1" />
@@ -587,8 +596,8 @@ export default function MaintenancePortal() {
                                     </div>
                                 </div>
 
-                                
-                                
+
+
                                 {/* Best Time for Visit */}
                                 <div className="mb-5">
                                     <label htmlFor="visitTime" className="block text-sm font-medium text-gray-700 mb-1">
@@ -653,13 +662,13 @@ export default function MaintenancePortal() {
                                             <p className="text-sm text-gray-500">Name</p>
                                             <p className="font-medium text-gray-800">{formData.name || "-"}</p>
                                         </div>
-                                        
+
                                         <div>
                                             <p className="text-sm text-gray-500">Email</p>
                                             <p className="font-medium text-gray-800">{formData.email || "-"}</p>
                                         </div>
                                         <div>
-                                        <p className="text-sm text-gray-500">Phone</p>
+                                            <p className="text-sm text-gray-500">Phone</p>
                                             <p className="font-medium text-gray-800">{formData.phone || "-"}</p>
                                         </div>
                                         <div>
@@ -688,7 +697,7 @@ export default function MaintenancePortal() {
                                             <p className="text-sm text-gray-500">Preferred Visit Time</p>
                                             <p className="font-medium text-gray-800">{getVisitTimeName()}</p>
                                         </div>
-                                        
+
                                     </div>
                                     <div>
                                         <p className="text-sm text-gray-500">Description</p>

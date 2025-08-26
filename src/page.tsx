@@ -15,14 +15,14 @@ import {
     CheckCircle,
     AlertCircle,
     PenToolIcon as Tool,
-    
+
     MessageSquare,
     Zap,
     Droplet,
     Hammer,
     ChevronDown,
     ChevronUp,
-    RefreshCw, 
+    RefreshCw,
     CheckCheck,
     Calendar,
     Printer,
@@ -37,6 +37,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/select"
 
 import { Avatar, AvatarFallback, AvatarImage } from "./components/avatar"
+import {
+    getCurrentAdminDetails,
+    getFilteredMaintenanceRequests,
+    canAdminAccessHostel,
+    getAdminHostelAccess,
+    type Admin
+} from "./lib/adminAccess"
 
 // Types
 type MaintenanceRequest = {
@@ -84,16 +91,50 @@ const maintenanceStaff: StaffMember[] = [
 export default function AdminDashboard() {
     // State
     const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
+    const [currentAdmin, setCurrentAdmin] = useState<Admin | null>(null);
+    const [adminAccess, setAdminAccess] = useState<{
+        canAccessFemaleHostels: boolean;
+        canAccessMaleHostels: boolean;
+        assignedHostel: string;
+        accessibleHostels: string[];
+    } | null>(null);
 
-useEffect(() => {
-  supabase
-    .from('maintenance_requests')
-    .select('*')
-    .then(({ data, error }) => {
-      if (error) console.error(error);
-      else setRequests(data || []);
-    });
-}, []);
+    // Load admin details and filtered requests
+    useEffect(() => {
+        const loadAdminData = async () => {
+            try {
+                // Get current user
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user?.email) return;
+
+                // Get admin details
+                const admin = await getCurrentAdminDetails(supabase, user.email);
+                if (!admin) {
+                    console.error('Admin not found for email:', user.email);
+                    return;
+                }
+
+                setCurrentAdmin(admin);
+
+                // Get admin access details
+                const access = getAdminHostelAccess(admin);
+                setAdminAccess(access);
+
+                // Load filtered maintenance requests
+                const filteredRequests = await getFilteredMaintenanceRequests(supabase, admin);
+                setRequests(filteredRequests);
+
+                console.log('Admin loaded:', admin);
+                console.log('Admin access:', access);
+                console.log('Filtered requests:', filteredRequests.length);
+
+            } catch (error) {
+                console.error('Error loading admin data:', error);
+            }
+        };
+
+        loadAdminData();
+    }, []);
 
 
     const [selectedRequest, setSelectedRequest] = useState<MaintenanceRequest | null>(null)
@@ -107,39 +148,59 @@ useEffect(() => {
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
     const [viewMode, setViewMode] = useState<"active" | "past">("active")
 
+    // Get available hostels based on admin access
+    const getAvailableHostels = () => {
+        if (!adminAccess) return [];
+
+        const allHostels = [
+            "Viswakarma Bhavan", "Valmiki Bhavan", "Gautham Bhavan", "Gandhi Bhavan",
+            "Budh Bhavan", "Malaivya Bhavan", "Meera Bhavan", "Shankar Bhavan",
+            "Ram Bhavan", "Krishna Bhavan", "Vyas Bhavan", "Ganga Bhavan"
+        ];
+
+        const femaleHostels = ["Malaivya Bhavan", "Meera Bhavan", "Ganga Bhavan"];
+
+        if (adminAccess.canAccessFemaleHostels) {
+            return femaleHostels;
+        } else {
+            return allHostels.filter(hostel => !femaleHostels.includes(hostel));
+        }
+    };
+
     const isPast = (r: MaintenanceRequest) => r.isDeleted === true || r.status === "completed"
-    
+
     // Filter and sort requests
     const filteredRequests = useMemo(() => {
-    return requests
-    .filter((request) => {
+        return requests
+            .filter((request) => {
 
-        const matchesView = viewMode === "active" ? !isPast(request) : isPast(request)
+                const matchesView = viewMode === "active" ? !isPast(request) : isPast(request)
 
-      const search = searchQuery.toLowerCase()
-  
-      const matchesSearch =
-        (request.name?.toLowerCase() ?? "").includes(search) ||
-        (request.studentId?.toLowerCase() ?? "").includes(search) ||
-        (String(request.id) ?? "").includes(search)
-  
-      // Status filter (skip when viewing past and isDeleted; still allow completed match)
-        const matchesStatus =
-          statusFilter === "all" ||
-          request.status === statusFilter ||
-          (viewMode === "past" && request.isDeleted === true && statusFilter === "all")
-      const matchesBuilding = buildingFilter === "all" || request.building === buildingFilter
-      const matchesCategory = categoryFilter === "all" || request.category === categoryFilter
-      const matchesPriority = priorityFilter === "all" || request.priority === priorityFilter
-  
-     return matchesView && matchesSearch && matchesStatus && matchesBuilding && matchesCategory && matchesPriority
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.created_at ?? "").getTime()
-      const dateB = new Date(b.created_at ?? "").getTime()
-      return sortOrder === "desc" ? dateB - dateA : dateA - dateB
-    })}, [requests, viewMode, searchQuery, statusFilter, buildingFilter, categoryFilter, priorityFilter, sortOrder])
-  
+                const search = searchQuery.toLowerCase()
+
+                const matchesSearch =
+                    (request.name?.toLowerCase() ?? "").includes(search) ||
+                    (request.studentId?.toLowerCase() ?? "").includes(search) ||
+                    (String(request.id) ?? "").includes(search)
+
+                // Status filter (skip when viewing past and isDeleted; still allow completed match)
+                const matchesStatus =
+                    statusFilter === "all" ||
+                    request.status === statusFilter ||
+                    (viewMode === "past" && request.isDeleted === true && statusFilter === "all")
+                const matchesBuilding = buildingFilter === "all" || request.building === buildingFilter
+                const matchesCategory = categoryFilter === "all" || request.category === categoryFilter
+                const matchesPriority = priorityFilter === "all" || request.priority === priorityFilter
+
+                return matchesView && matchesSearch && matchesStatus && matchesBuilding && matchesCategory && matchesPriority
+            })
+            .sort((a, b) => {
+                const dateA = new Date(a.created_at ?? "").getTime()
+                const dateB = new Date(b.created_at ?? "").getTime()
+                return sortOrder === "desc" ? dateB - dateA : dateA - dateB
+            })
+    }, [requests, viewMode, searchQuery, statusFilter, buildingFilter, categoryFilter, priorityFilter, sortOrder])
+
     // Statistics
     const totalRequests = requests.length
     const pendingRequests = requests.filter((r) => r.status === "pending" && !r.isDeleted).length
@@ -149,12 +210,12 @@ useEffect(() => {
     // Handle status update
     const updateStatus = async (id: string, status: "pending" | "in-progress" | "completed") => {
         setIsLoading(true);
-    
+
         const { error } = await supabase
             .from("maintenance_requests")
             .update({ status })
             .eq("id", id);
-    
+
         if (error) {
             console.error("Status update failed:", error);
         } else {
@@ -162,33 +223,33 @@ useEffect(() => {
                 request.id === id ? { ...request, status } : request
             );
             setRequests(updatedRequests);
-    
+
             if (selectedRequest?.id === id) {
                 setSelectedRequest({ ...selectedRequest, status });
             }
         }
-    
+
         setIsLoading(false);
     };
-    
-    
 
-const handlePrint = (request: MaintenanceRequest) => {
-  const doc = new jsPDF();
 
-  doc.setFontSize(16);
-  doc.text("Maintenance Request Details", 20, 20);
 
-  doc.setFontSize(12);
-  doc.text(`ID: ${request.id}`, 20, 40);
-  doc.text(`Name: ${request.name}`, 20, 50);
-  doc.text(`Phone: ${request.phone}`, 20, 60);
-  doc.text(`Category: ${request.category}`, 20, 70);
-  doc.text("Description:", 20, 80);
-  doc.text(doc.splitTextToSize(request.problem ?? "N/A", 170), 20, 90);
+    const handlePrint = (request: MaintenanceRequest) => {
+        const doc = new jsPDF();
 
-  doc.save(`${request.id}.pdf`);
-};
+        doc.setFontSize(16);
+        doc.text("Maintenance Request Details", 20, 20);
+
+        doc.setFontSize(12);
+        doc.text(`ID: ${request.id}`, 20, 40);
+        doc.text(`Name: ${request.name}`, 20, 50);
+        doc.text(`Phone: ${request.phone}`, 20, 60);
+        doc.text(`Category: ${request.category}`, 20, 70);
+        doc.text("Description:", 20, 80);
+        doc.text(doc.splitTextToSize(request.problem ?? "N/A", 170), 20, 90);
+
+        doc.save(`${request.id}.pdf`);
+    };
 
 
     // Handle staff assignment
@@ -202,7 +263,7 @@ const handlePrint = (request: MaintenanceRequest) => {
         // Simulate API call
         setTimeout(() => {
             setRequests((prev) =>
-        prev.map((r) => (r.id === requestId ? { ...r, assignedTo: staffMember.name } : r)),
+                prev.map((r) => (r.id === requestId ? { ...r, assignedTo: staffMember.name } : r)),
             )
 
             setSelectedRequest((prev) => (prev && prev.id === requestId ? { ...prev, assignedTo: staffMember.name } : prev))
@@ -212,24 +273,24 @@ const handlePrint = (request: MaintenanceRequest) => {
     }
 
 
-        // Soft delete (persist to Supabase)
-        const softDelete = async (id: string) => {
-            if (!confirm("Soft delete this request? You can restore it from Past requests.")) return;
-            setIsLoading(true);
-            // Update isDeleted in Supabase
-            const { error } = await supabase
-                .from("maintenance_requests")
-                .update({ isDeleted: true })
-                .eq("id", id);
+    // Soft delete (persist to Supabase)
+    const softDelete = async (id: string) => {
+        if (!confirm("Soft delete this request? You can restore it from Past requests.")) return;
+        setIsLoading(true);
+        // Update isDeleted in Supabase
+        const { error } = await supabase
+            .from("maintenance_requests")
+            .update({ isDeleted: true })
+            .eq("id", id);
 
-            if (error) {
-                console.error("Soft delete failed:", error);
-            } else {
-                setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, isDeleted: true } : r)));
-                setSelectedRequest((prev) => (prev && prev.id === id ? { ...prev, isDeleted: true } : prev));
-            }
-            setIsLoading(false);
+        if (error) {
+            console.error("Soft delete failed:", error);
+        } else {
+            setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, isDeleted: true } : r)));
+            setSelectedRequest((prev) => (prev && prev.id === id ? { ...prev, isDeleted: true } : prev));
         }
+        setIsLoading(false);
+    }
 
     // Reopen request (from completed or deleted -> pending and active)
     const reopenRequest = async (id: string) => {
@@ -251,7 +312,7 @@ const handlePrint = (request: MaintenanceRequest) => {
         }
         setIsLoading(false);
     }
-   
+
 
     // Reset filters
     const resetFilters = () => {
@@ -264,17 +325,17 @@ const handlePrint = (request: MaintenanceRequest) => {
 
     // Helper functions
     const formatDate = (dateString: string) => {
-    if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "Invalid Date ve";
+        if (!dateString) return "N/A";
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return "Invalid Date ve";
 
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+        return date.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
     };
 
 
@@ -320,49 +381,49 @@ const handlePrint = (request: MaintenanceRequest) => {
                 return <Badge variant="outline">Unknown</Badge>
         }
     }
-    
 
 
-    
-    
+
+
+
     const handlePrintAll = (filteredRequests: MaintenanceRequest[]) => {
-      const doc = new jsPDF();
-    
-      doc.setFontSize(16);
-      doc.text("Filtered Maintenance Requests", 14, 20);
-    
-      autoTable(doc, {
-        startY: 30,
-        head: [["Name", "Phone", "Building", "Room", "Category", "Priority", "Description"]],
-        body: filteredRequests.map((req) => [
-          
-          req.name,
-          req.phone,
-          req.building,
-          req.roomNo,
-          req.category,
-          req.priority,
-          req.problem,
-        ]),
-        styles: {
-          cellPadding: 2,
-          fontSize: 8,
-        },
-      });
-    
-      doc.save("filtered_requests.pdf");
+        const doc = new jsPDF();
+
+        doc.setFontSize(16);
+        doc.text("Filtered Maintenance Requests", 14, 20);
+
+        autoTable(doc, {
+            startY: 30,
+            head: [["Name", "Phone", "Building", "Room", "Category", "Priority", "Description"]],
+            body: filteredRequests.map((req) => [
+
+                req.name,
+                req.phone,
+                req.building,
+                req.roomNo,
+                req.category,
+                req.priority,
+                req.problem,
+            ]),
+            styles: {
+                cellPadding: 2,
+                fontSize: 8,
+            },
+        });
+
+        doc.save("filtered_requests.pdf");
     };
-    
-    
+
+
     const getStatusBadge = (request: MaintenanceRequest) => {
-    if (request.isDeleted) {
-      return (
-        <Badge variant="outline" className="text-gray-600 border-gray-300">
-          Deleted
-        </Badge>
-      )
-    }
-    switch (request.status) {
+        if (request.isDeleted) {
+            return (
+                <Badge variant="outline" className="text-gray-600 border-gray-300">
+                    Deleted
+                </Badge>
+            )
+        }
+        switch (request.status) {
             case "pending":
                 return (
                     <Badge variant="outline" className="text-amber-600 border-amber-600">
@@ -385,8 +446,8 @@ const handlePrint = (request: MaintenanceRequest) => {
                 return <Badge variant="outline">Unknown</Badge>
         }
     }
-    
-      
+
+
     const getHostelName = (buildingCode: string) => {
         const hostels: Record<string, string> = {
             "Viswakarma Bhavan": "Viswakarma Bhavan",
@@ -406,15 +467,15 @@ const handlePrint = (request: MaintenanceRequest) => {
     }
 
     const handleExportPdf = async () => {
-    // Map MaintenanceRequest[] to RequestForReport[]
-    const requestsForReport = filteredRequests.map((r) => ({
-      ...r,
-      dateSubmitted: r.created_at,
-    }));
-    await exportRequestsPdf(requestsForReport, {
-      title: `Maintenance Report — ${viewMode === "active" ? "Active" : "Past"} Requests`,
-    })
-  }
+        // Map MaintenanceRequest[] to RequestForReport[]
+        const requestsForReport = filteredRequests.map((r) => ({
+            ...r,
+            dateSubmitted: r.created_at,
+        }));
+        await exportRequestsPdf(requestsForReport, {
+            title: `Maintenance Report — ${viewMode === "active" ? "Active" : "Past"} Requests`,
+        })
+    }
 
     return (
         <div className="min-h-screen bg-gray-100">
@@ -430,6 +491,17 @@ const handlePrint = (request: MaintenanceRequest) => {
                             </div>
                         </div>
                         <div className="flex items-center space-x-4">
+                            {/* Admin Access Info */}
+                            {adminAccess && (
+                                <div className="hidden md:block bg-blue-500 bg-opacity-20 rounded-lg px-4 py-2">
+                                    <div className="text-sm">
+                                        <div className="font-medium">Access: {adminAccess.assignedHostel}</div>
+                                        <div className="text-xs text-blue-100">
+                                            {adminAccess.canAccessFemaleHostels ? 'Female Hostels' : 'Male Hostels'}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div className="hidden md:flex items-center space-x-2">
                                 <span>Admin User</span>
                                 <Avatar className="h-8 w-8">
@@ -509,33 +581,31 @@ const handlePrint = (request: MaintenanceRequest) => {
                         <Card className="h-full">
                             <CardHeader className="pb-2">
                                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl">Maintenance Requests</CardTitle>
+                                    <CardTitle className="text-xl">Maintenance Requests</CardTitle>
 
-                  {/* View Switcher */}
-                  <div className="inline-flex rounded-md border overflow-hidden">
-                    <button
-                      aria-label="Show Active Requests"
-                      className={`px-3 py-1.5 text-sm ${
-                        viewMode === "active" ? "bg-blue-600 text-white" : "bg-white text-gray-700"
-                      }`}
-                      onClick={() => setViewMode("active")}
-                    >
-                      Active
-                    </button>
-                    <button
-                      aria-label="Show Past Requests"
-                      className={`px-3 py-1.5 text-sm border-l ${
-                        viewMode === "past" ? "bg-blue-600 text-white" : "bg-white text-gray-700"
-                      }`}
-                      onClick={() => setViewMode("past")}
-                    >
-                      Past
-                    </button>
-                  </div>
-                </div>
+                                    {/* View Switcher */}
+                                    <div className="inline-flex rounded-md border overflow-hidden">
+                                        <button
+                                            aria-label="Show Active Requests"
+                                            className={`px-3 py-1.5 text-sm ${viewMode === "active" ? "bg-blue-600 text-white" : "bg-white text-gray-700"
+                                                }`}
+                                            onClick={() => setViewMode("active")}
+                                        >
+                                            Active
+                                        </button>
+                                        <button
+                                            aria-label="Show Past Requests"
+                                            className={`px-3 py-1.5 text-sm border-l ${viewMode === "past" ? "bg-blue-600 text-white" : "bg-white text-gray-700"
+                                                }`}
+                                            onClick={() => setViewMode("past")}
+                                        >
+                                            Past
+                                        </button>
+                                    </div>
+                                </div>
 
-                {/* Sort control */}
-                <div className="mt-3">
+                                {/* Sort control */}
+                                <div className="mt-3">
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -550,92 +620,89 @@ const handlePrint = (request: MaintenanceRequest) => {
                             <CardContent>
                                 {/* Search and Filters */}
                                 <div className="mb-4 space-y-3">
-  <div className="flex items-center gap-2 px-3 py-2 border rounded-md shadow-sm">
-    <Search className="text-gray-400 h-4 w-4" />
-    <input
-      type="text"
-      placeholder="Search by name, ID or request number..."
-      value={searchQuery}
-      onChange={(e) => setSearchQuery(e.target.value)}
-      className="w-full outline-none bg-transparent"
-    />
-  </div>
+                                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md shadow-sm">
+                                        <Search className="text-gray-400 h-4 w-4" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search by name, ID or request number..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="w-full outline-none bg-transparent"
+                                        />
+                                    </div>
 
 
-                                
 
-                                
+
+
 
                                     <div className="grid grid-cols-2 gap-2">
-                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                        <SelectTrigger>
-                                        <SelectValue placeholder="Status" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-blue-100/50 backdrop-blur-md shadow-lg">
-                                        <SelectItem className="hover:bg-blue-200/50" value="all">All Statuses</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="pending">Pending</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="in-progress">In Progress</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="completed">Completed</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Status" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-blue-100/50 backdrop-blur-md shadow-lg">
+                                                <SelectItem className="hover:bg-blue-200/50" value="all">All Statuses</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="pending">Pending</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="in-progress">In Progress</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="completed">Completed</SelectItem>
+                                            </SelectContent>
+                                        </Select>
 
-                                    <Select value={buildingFilter} onValueChange={setBuildingFilter}>
-                                        <SelectTrigger>
-                                        <SelectValue placeholder="Hostels" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-blue-100/50 backdrop-blur-md shadow-lg">
-                                        <SelectItem className="hover:bg-blue-200/50" value="all">Hostels</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Viswakarma Bhavan">Viswakarma Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Valmiki Bhavan">Valmiki Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Gautham Bhavan">Gautham Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Gandhi Bhavan">Gandhi Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Budh Bhavan">Budh Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Malaivya Bhavan">Malaivya Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Meera Bhavan">Meera Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Shankar Bhavan">Shankar Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Ram Bhavan">Ram Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Krishna Bhavan">Krishna Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Vyas Bhavan">Vyas Bhavan</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="Ganga Bhavan">Ganga Bhavan</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                        <Select value={buildingFilter} onValueChange={setBuildingFilter}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Hostels" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-blue-100/50 backdrop-blur-md shadow-lg">
+                                                <SelectItem className="hover:bg-blue-200/50" value="all">All Hostels</SelectItem>
+                                                {getAvailableHostels().map((hostel) => (
+                                                    <SelectItem
+                                                        key={hostel}
+                                                        className="hover:bg-blue-200/50"
+                                                        value={hostel}
+                                                    >
+                                                        {hostel}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
-                                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                                        <SelectTrigger>
-                                        <SelectValue placeholder="Category" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-blue-100/50 backdrop-blur-md shadow-lg">
-                                        <SelectItem className="hover:bg-blue-200/50" value="all">All Categories</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="electricity">Electricity</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="plumbing">Plumbing</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="carpentry">Carpentry</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Category" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-blue-100/50 backdrop-blur-md shadow-lg">
+                                                <SelectItem className="hover:bg-blue-200/50" value="all">All Categories</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="electricity">Electricity</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="plumbing">Plumbing</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="carpentry">Carpentry</SelectItem>
+                                            </SelectContent>
+                                        </Select>
 
-                                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                                        <SelectTrigger>
-                                        <SelectValue placeholder="Priority" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-blue-100/50 backdrop-blur-md shadow-lg">
-                                        <SelectItem className="hover:bg-blue-200/50" value="all">All Priorities</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="high">High</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="medium">Medium</SelectItem>
-                                        <SelectItem className="hover:bg-blue-200/50" value="low">Low</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Priority" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-blue-100/50 backdrop-blur-md shadow-lg">
+                                                <SelectItem className="hover:bg-blue-200/50" value="all">All Priorities</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="high">High</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="medium">Medium</SelectItem>
+                                                <SelectItem className="hover:bg-blue-200/50" value="low">Low</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
                                     <Button variant="outline" size="sm" onClick={handleExportPdf} className="w-full">
-                                    <Printer className="w-4 h-4 mr-2" /> Export PDF
+                                        <Printer className="w-4 h-4 mr-2" /> Export PDF
                                     </Button>
 
                                     <Button variant="outline" size="sm" onClick={resetFilters} className="w-full">
                                         <Filter className="w-4 h-4 mr-2" /> Reset Filters
                                     </Button>
                                 </div>
-                                
+
 
                                 {/* Request List */}
                                 <div className="space-y-3 mt-4 max-h-[calc(100vh-420px)] overflow-y-auto pr-1">
@@ -650,22 +717,22 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div>
                                                         <div className="text-gray-900 font-semibold">
-                                                        {request.name} - {request.id}
+                                                            {request.name} - {request.id}
                                                         </div>
                                                         <div className="flex items-center text-sm text-gray-600 mt-1">
-                                                        {getCategoryIcon(request.category)}
-                                                        <span className="ml-2 capitalize">{request.category}</span>
+                                                            {getCategoryIcon(request.category)}
+                                                            <span className="ml-2 capitalize">{request.category}</span>
                                                         </div>
                                                     </div>
                                                     <div>{getStatusBadge(request)}</div>
-                                                    </div>
+                                                </div>
 
-                                                    <div className="mb-2">
+                                                <div className="mb-2">
                                                     <div className="flex items-center text-sm text-gray-600">
                                                         <Building className="w-4 h-4 mr-1" />
                                                         <span>{getHostelName(request.building)} - Room {request.roomNo}</span>
                                                     </div>
-                                                    </div>
+                                                </div>
 
                                                 <div className="flex justify-between items-center mt-2">
                                                     <div className="text-xs text-gray-500">{formatDate(request.created_at)}</div>
@@ -696,7 +763,7 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                 <span>Request {selectedRequest.id}</span>
                                                 <span className="ml-3">{getStatusBadge(selectedRequest)}</span>
                                             </CardTitle>
-                                            
+
                                         </div>
                                     </CardHeader>
                                     <CardContent>
@@ -714,7 +781,7 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                 >
                                                     Actions
                                                 </TabsTrigger>
-                                                </TabsList>
+                                            </TabsList>
 
                                             <TabsContent value="details" className="space-y-6">
                                                 {/* Student Information */}
@@ -725,7 +792,7 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                             <p className="text-sm text-gray-500">Name</p>
                                                             <p className="font-medium">{selectedRequest.name}</p>
                                                         </div>
-                                                        
+
                                                         <div>
                                                             <p className="text-sm text-gray-500">Email</p>
                                                             <p className="font-medium">{selectedRequest.email}</p>
@@ -742,7 +809,7 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                             <p className="text-sm text-gray-500">Room Number</p>
                                                             <p className="font-medium">{selectedRequest.roomNo}</p>
                                                         </div>
-                                                        
+
                                                     </div>
                                                 </div>
 
@@ -823,7 +890,7 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                             Mark as In Progress
                                                         </Button>
                                                         <Button
-                                                             variant={selectedRequest.status === "completed" && !selectedRequest.isDeleted ? "default" : "outline"}
+                                                            variant={selectedRequest.status === "completed" && !selectedRequest.isDeleted ? "default" : "outline"}
                                                             onClick={() => updateStatus(selectedRequest.id, "completed")}
                                                             disabled={isLoading || selectedRequest.isDeleted}
                                                             title={selectedRequest.isDeleted ? "Restore before updating status" : undefined}
@@ -834,33 +901,33 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                     </div>
                                                 </div>
 
-                                                 {/* Soft Delete / Reopen */}
+                                                {/* Soft Delete / Reopen */}
                                                 <div className="space-y-3">
-                                                <h3 className="text-lg font-medium">Archive Controls</h3>
-                                                <div className="flex flex-wrap gap-3">
-                                                    {!isPast(selectedRequest) ? (
-                                                    <Button
-                                                        variant="destructive"
-                                                        onClick={() => softDelete(selectedRequest.id)}
-                                                        disabled={isLoading}
-                                                    >
-                                                        <Trash2 className="w-4 h-4 mr-2" />
-                                                        Soft Delete
-                                                    </Button>
-                                                    ) : (
-                                                    <Button
-                                                        variant="secondary"
-                                                        onClick={() => reopenRequest(selectedRequest.id)}
-                                                        disabled={isLoading}
-                                                    >
-                                                        <RotateCcw className="w-4 h-4 mr-2" />
-                                                        Reopen Request
-                                                    </Button>
-                                                    )}
-                                                </div>
-                                                <p className="text-sm text-gray-500">
-                                                    Soft delete moves the request to Past. Reopen brings it back as Pending.
-                                                </p>
+                                                    <h3 className="text-lg font-medium">Archive Controls</h3>
+                                                    <div className="flex flex-wrap gap-3">
+                                                        {!isPast(selectedRequest) ? (
+                                                            <Button
+                                                                variant="destructive"
+                                                                onClick={() => softDelete(selectedRequest.id)}
+                                                                disabled={isLoading}
+                                                            >
+                                                                <Trash2 className="w-4 h-4 mr-2" />
+                                                                Soft Delete
+                                                            </Button>
+                                                        ) : (
+                                                            <Button
+                                                                variant="secondary"
+                                                                onClick={() => reopenRequest(selectedRequest.id)}
+                                                                disabled={isLoading}
+                                                            >
+                                                                <RotateCcw className="w-4 h-4 mr-2" />
+                                                                Reopen Request
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-gray-500">
+                                                        Soft delete moves the request to Past. Reopen brings it back as Pending.
+                                                    </p>
                                                 </div>
 
                                                 {/* Assign Staff */}
@@ -871,10 +938,10 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                             <div
                                                                 key={staff.id}
                                                                 className={`p-3 rounded-lg border cursor-pointer transition-all ${selectedRequest.assignedTo === staff.name
-                                                                        ? "border-blue-500 bg-blue-50"
-                                                                        : "border-gray-200 hover:border-blue-300"
+                                                                    ? "border-blue-500 bg-blue-50"
+                                                                    : "border-gray-200 hover:border-blue-300"
                                                                     } ${selectedRequest.isDeleted ? "opacity-60 cursor-not-allowed" : ""}`}
-                                                                    onClick={() => !selectedRequest.isDeleted && assignStaff(selectedRequest.id, staff.id)}
+                                                                onClick={() => !selectedRequest.isDeleted && assignStaff(selectedRequest.id, staff.id)}
                                                             >
                                                                 <div className="flex items-center">
                                                                     <Avatar className="h-8 w-8 mr-3">
@@ -889,7 +956,7 @@ const handlePrint = (request: MaintenanceRequest) => {
                                                         ))}
                                                     </div>
                                                 </div>
-                                                
+
 
                                             </TabsContent>
                                         </Tabs>

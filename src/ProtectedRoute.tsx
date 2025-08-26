@@ -27,7 +27,7 @@ export default function ProtectedRoute({
       }
 
       const allowedDomain = 'hyderabad.bits-pilani.ac.in';
-      
+
 
       if (!user.email?.endsWith(`@${allowedDomain}`)) {
         await supabase.auth.signOut();
