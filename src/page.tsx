@@ -117,7 +117,7 @@ export default function AdminDashboard() {
                 setCurrentAdmin(admin);
 
                 // Get admin access details
-                const access = getAdminHostelAccess(admin);
+                const access = await getAdminHostelAccess(supabase, admin);
                 setAdminAccess(access);
 
                 // Load filtered maintenance requests

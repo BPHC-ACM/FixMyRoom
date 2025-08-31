@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Type definitions
+// Types and interfaces for the admin access system
+import type { SupabaseClient } from '@supabase/supabase-js'
 export interface Admin {
     id: number
     created_at: string
@@ -8,10 +9,11 @@ export interface Admin {
     email_id: string
     admin_type: string
     hostel_name: string
+    female_hostel: boolean
 }
 
 export interface MaintenanceRequest {
-    id: number
+    id: string
     created_at: string
     email: string
     phone: string
@@ -30,13 +32,10 @@ export interface MaintenanceRequest {
     hasImage?: boolean
 }
 
-// Female hostels list
-const FEMALE_HOSTELS = ['Malaivya Bhavan', 'Meera Bhavan', 'Ganga Bhavan']
-
 /**
  * Get admin details for the current logged-in user
  */
-export async function getCurrentAdminDetails(supabase: any, userEmail: string): Promise<Admin | null> {
+export async function getCurrentAdminDetails(supabase: SupabaseClient, userEmail: string): Promise<Admin | null> {
     const { data, error } = await supabase
         .from('admins')
         .select('*')
@@ -52,16 +51,42 @@ export async function getCurrentAdminDetails(supabase: any, userEmail: string): 
 }
 
 /**
+ * Check if a hostel is a female hostel by querying the database
+ */
+export async function isFemaleHostelDB(supabase: any, hostelName: string): Promise<boolean> {
+    const { data, error } = await supabase
+        .from('admins')
+        .select('female_hostel')
+        .eq('hostel_name', hostelName)
+        .limit(1)
+        .single()
+
+    if (error || !data) {
+        console.error('Error checking if hostel is female:', error)
+        return false
+    }
+
+    return data.female_hostel
+}
+
+/**
  * Check if admin can access requests from a specific hostel
  */
-export function canAdminAccessHostel(admin: Admin, hostelName: string): boolean {
+export async function canAdminAccessHostel(
+    supabase: any,
+    admin: Admin,
+    hostelName: string
+): Promise<boolean> {
+    // Get the female_hostel status for the target hostel
+    const isTargetFemaleHostel = await isFemaleHostelDB(supabase, hostelName)
+
     // If it's a female hostel, admin must be assigned to a female hostel
-    if (FEMALE_HOSTELS.includes(hostelName)) {
-        return FEMALE_HOSTELS.includes(admin.hostel_name)
+    if (isTargetFemaleHostel) {
+        return admin.female_hostel
     }
 
     // For male hostels, admin must NOT be assigned to a female hostel
-    return !FEMALE_HOSTELS.includes(admin.hostel_name)
+    return !admin.female_hostel
 }
 
 /**
@@ -84,9 +109,13 @@ export async function getFilteredMaintenanceRequests(
     }
 
     // Filter requests based on admin's hostel access
-    const filteredRequests = allRequests.filter((request: MaintenanceRequest) => {
-        return canAdminAccessHostel(admin, request.building)
-    })
+    const filteredRequests = []
+    for (const request of allRequests) {
+        const canAccess = await canAdminAccessHostel(supabase, admin, request.building)
+        if (canAccess) {
+            filteredRequests.push(request)
+        }
+    }
 
     return filteredRequests
 }
@@ -112,28 +141,54 @@ export function normalizeHostelName(hostelName: string): string {
 }
 
 /**
- * Check if a hostel is a female hostel
+ * Check if a hostel is a female hostel using database lookup
  */
-export function isFemaleHostel(hostelName: string): boolean {
-    const normalizedName = normalizeHostelName(hostelName)
-    return FEMALE_HOSTELS.includes(normalizedName)
+export async function isFemaleHostel(supabase: any, hostelName: string): Promise<boolean> {
+    return await isFemaleHostelDB(supabase, normalizeHostelName(hostelName))
 }
 
 /**
  * Get hostel access summary for admin
  */
-export function getAdminHostelAccess(admin: Admin): {
+export async function getAdminHostelAccess(
+    supabase: any,
+    admin: Admin
+): Promise<{
     canAccessFemaleHostels: boolean
     canAccessMaleHostels: boolean
     assignedHostel: string
     accessibleHostels: string[]
-} {
-    const canAccessFemale = FEMALE_HOSTELS.includes(admin.hostel_name)
+}> {
+    const canAccessFemale = admin.female_hostel
+
+    // Get list of accessible hostels from database
+    let accessibleHostels: string[] = []
+    if (canAccessFemale) {
+        // Get all female hostels
+        const { data: femaleHostels, error } = await supabase
+            .from('admins')
+            .select('hostel_name')
+            .eq('female_hostel', true)
+
+        if (!error && femaleHostels) {
+            accessibleHostels = [...new Set(femaleHostels.map((h: { hostel_name: string }) => h.hostel_name))]
+        }
+    } else {
+        // Get all male hostels
+        const { data: maleHostels, error } = await supabase
+            .from('admins')
+            .select('hostel_name')
+            .eq('female_hostel', false)
+
+        if (!error && maleHostels) {
+            accessibleHostels = [...new Set(maleHostels.map((h: { hostel_name: string }) => h.hostel_name))]
+        }
+    }
 
     return {
         canAccessFemaleHostels: canAccessFemale,
         canAccessMaleHostels: !canAccessFemale,
         assignedHostel: admin.hostel_name,
-        accessibleHostels: canAccessFemale ? FEMALE_HOSTELS : []
+        accessibleHostels
     }
 }
