@@ -20,10 +20,13 @@ import {
     Droplet,
     Hammer,
     Upload,
+    Camera,
+    X,
     PenToolIcon as Tool,
 } from "lucide-react"
 import { Card, CardContent } from "./components/card"
 import { supabase } from "./supabaseClient"
+import { uploadPhoto, type PhotoUploadResult } from "./lib/photoUpload"
 
 
 export default function MaintenancePortal() {
@@ -68,6 +71,8 @@ export default function MaintenancePortal() {
     // Image preview state
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [hasImage, setHasImage] = useState(false)
+    const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null)
+    const [isUploadingImage, setIsUploadingImage] = useState(false)
 
     // Loading and success states
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -112,19 +117,29 @@ export default function MaintenancePortal() {
     }
 
     // Handle image upload
-    const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0]
-            const reader = new FileReader()
 
+            // Show preview immediately
+            const reader = new FileReader()
             reader.onload = (event) => {
                 if (event.target) {
                     setImagePreview(event.target.result as string)
                     setHasImage(true)
                 }
             }
-
             reader.readAsDataURL(file)
+        }
+    }
+
+    // Remove uploaded image
+    const removeImage = () => {
+        setImagePreview(null)
+        setHasImage(false)
+        setUploadedImageUrl(null)
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
         }
     }
 
@@ -167,6 +182,7 @@ export default function MaintenancePortal() {
             // Get the current user
             const { data: { user } } = await supabase.auth.getUser();
 
+            // First, insert the maintenance request to get an ID
             const { data, error } = await supabase
                 .from('maintenance_requests')
                 .insert([
@@ -184,7 +200,8 @@ export default function MaintenancePortal() {
                         termsCheck: formData.termsCheck,
                         status: 'pending',
                         createdAt: new Date().toISOString(),
-                        isDeleted: false
+                        isDeleted: false,
+                        hasImage: hasImage
                     }
                 ])
                 .select(); // Add select() to get the inserted record back
@@ -195,13 +212,46 @@ export default function MaintenancePortal() {
                 return;
             }
 
-            if (data && data.length > 0) {
-                setRequestId(data[0].id || 'Unknown');
-                setShowSuccess(true);
+            if (!data || data.length === 0) {
+                alert("Failed to create maintenance request");
+                return;
             }
 
+            const requestId = data[0].id;
+
+            // Handle photo upload if image is selected
+            if (hasImage && fileInputRef.current?.files?.[0]) {
+                setIsUploadingImage(true);
+                const file = fileInputRef.current.files[0];
+
+                const uploadResult = await uploadPhoto(file, requestId);
+
+                if (uploadResult.success && uploadResult.imageUrl) {
+                    // Update the request with the image URL
+                    const { error: updateError } = await supabase
+                        .from('maintenance_requests')
+                        .update({
+                            image_url: uploadResult.imageUrl,
+                            hasImage: true
+                        })
+                        .eq('id', requestId);
+
+                    if (updateError) {
+                        console.error("Failed to update request with image URL:", updateError);
+                    } else {
+                        setUploadedImageUrl(uploadResult.imageUrl);
+                    }
+                } else {
+                    console.error("Photo upload failed:", uploadResult.error);
+                    // Still proceed with the request creation, just without the image
+                }
+                setIsUploadingImage(false);
+            }
+
+            setRequestId(requestId || 'Unknown');
+            setShowSuccess(true);
+
             console.log("Form submitted successfully:", data);
-            // Optional: reset form or navigate somewhere
         } catch (err) {
             console.error("Unexpected error:", err);
             alert("Something went wrong!");
@@ -227,8 +277,12 @@ export default function MaintenancePortal() {
         })
         setImagePreview(null)
         setHasImage(false)
+        setUploadedImageUrl(null)
         setCurrentStep(1)
         setShowSuccess(false)
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+        }
     }
 
 
@@ -596,7 +650,62 @@ export default function MaintenancePortal() {
                                     </div>
                                 </div>
 
+                                {/* Photo Upload Section */}
+                                <div className="mb-5">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Add Photo (Optional)
+                                    </label>
+                                    <div className="text-xs text-gray-500 mb-3">
+                                        Upload a photo to help maintenance staff better understand the issue
+                                    </div>
 
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        accept="image/*"
+                                        onChange={handleImageUpload}
+                                        className="hidden"
+                                    />
+
+                                    {!hasImage ? (
+                                        <div
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all duration-300"
+                                        >
+                                            <Camera className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                                            <p className="text-gray-600 font-medium mb-1">Click to upload a photo</p>
+                                            <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
+                                        </div>
+                                    ) : (
+                                        <div className="relative border-2 border-gray-200 rounded-lg p-3">
+                                            <div className="flex items-start space-x-3">
+                                                <img
+                                                    src={imagePreview || ''}
+                                                    alt="Issue preview"
+                                                    className="w-20 h-20 object-cover rounded-lg"
+                                                />
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium text-gray-800">Photo uploaded</p>
+                                                    <p className="text-xs text-gray-500">Photo will be attached to your request</p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={removeImage}
+                                                        className="mt-2 text-red-600 text-xs hover:text-red-800 transition-colors duration-200"
+                                                    >
+                                                        Remove photo
+                                                    </button>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={removeImage}
+                                                    className="text-gray-400 hover:text-red-600 transition-colors duration-200"
+                                                >
+                                                    <X className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Best Time for Visit */}
                                 <div className="mb-5">

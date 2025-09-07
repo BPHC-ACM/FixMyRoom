@@ -44,30 +44,33 @@ import {
     getAdminHostelAccess,
     type Admin
 } from "./lib/adminAccess"
+import { deletePhotosForRequest } from "./lib/photoUpload"
 
+// Types
 // Types
 type MaintenanceRequest = {
     id: string
     name: string
-    studentId: string
+    studentId?: string
     email: string
     phone: string
     building: string
     roomNo: string
     category: string
-    problem: string
     priority: "low" | "medium" | "high"
+    problem: string
     visitTime: "morning" | "afternoon" | "evening" | "any"
     status: "pending" | "in-progress" | "completed"
     created_at: string
     assignedTo?: string
-    comments: {
+    comments?: {
         id: string
         text: string
         from: "admin" | "user"
         timestamp: string
     }[]
-    hasImage: boolean
+    hasImage?: boolean
+    image_url?: string
     isDeleted?: boolean
 }
 
@@ -226,6 +229,16 @@ export default function AdminDashboard() {
 
             if (selectedRequest?.id === id) {
                 setSelectedRequest({ ...selectedRequest, status });
+            }
+
+            // Delete photos when request is completed
+            if (status === "completed") {
+                try {
+                    await deletePhotosForRequest(id);
+                    console.log("Photos deleted for completed request:", id);
+                } catch (error) {
+                    console.error("Failed to delete photos for request:", id, error);
+                }
             }
         }
 
@@ -470,6 +483,7 @@ export default function AdminDashboard() {
         // Map MaintenanceRequest[] to RequestForReport[]
         const requestsForReport = filteredRequests.map((r) => ({
             ...r,
+            studentId: r.studentId || 'N/A',
             dateSubmitted: r.created_at,
         }));
         await exportRequestsPdf(requestsForReport, {
@@ -849,14 +863,16 @@ export default function AdminDashboard() {
                                                             <p className="mt-1 whitespace-pre-line">{selectedRequest.problem}</p>
                                                         </div>
 
-                                                        {selectedRequest.hasImage && (
+                                                        {selectedRequest.hasImage && selectedRequest.image_url && (
                                                             <div className="mt-4">
                                                                 <p className="text-sm text-gray-500 mb-1">Attached Image</p>
                                                                 <img
-                                                                    src="/placeholder.svg?height=200&width=300"
+                                                                    src={selectedRequest.image_url}
                                                                     alt="Issue"
-                                                                    className="rounded-lg border max-h-48 object-cover"
+                                                                    className="rounded-lg border max-h-48 object-cover cursor-pointer"
+                                                                    onClick={() => window.open(selectedRequest.image_url, '_blank')}
                                                                 />
+                                                                <p className="text-xs text-gray-400 mt-1">Click to view full size</p>
                                                             </div>
                                                         )}
                                                     </div>

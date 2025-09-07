@@ -13,28 +13,28 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        
-      
-      <Route path="/" element={<LoginPage />} />
-      <Route path="/redirect" element={<RedirectPage />} />
-      <Route
-  path="/MaintenancePortal"
-  element={
-    <ProtectedRoute>
-      <MaintenancePortal />
-    </ProtectedRoute>
-  }
-/>
 
-<Route
-  path="/AdminDashboard"
-  element={
-    <ProtectedRoute adminOnly={true}>
-      <AdminDashboard />
-    </ProtectedRoute>
-  }
-/>
-<Route path="*" element={<Navigate to="/" replace />} />
+
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/redirect" element={<RedirectPage />} />
+        <Route
+          path="/MaintenancePortal"
+          element={
+            <ProtectedRoute>
+              <MaintenancePortal />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/AdminDashboard"
+          element={
+            <ProtectedRoute adminOnly={true}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
     </Router>

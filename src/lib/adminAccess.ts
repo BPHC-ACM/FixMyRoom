@@ -21,15 +21,21 @@ export interface MaintenanceRequest {
     roomNo: string
     category: string
     problem: string
-    visitTime: string
+    visitTime: "morning" | "afternoon" | "evening" | "any"
     termsCheck: boolean
-    priority: string
+    priority: "low" | "medium" | "high"
     name: string
-    status: string
+    status: "pending" | "in-progress" | "completed"
     isDeleted: boolean
     studentId?: string
-    comments?: string
+    comments?: {
+        id: string
+        text: string
+        from: "admin" | "user"
+        timestamp: string
+    }[]
     hasImage?: boolean
+    image_url?: string
 }
 
 /**
@@ -171,7 +177,7 @@ export async function getAdminHostelAccess(
             .eq('female_hostel', true)
 
         if (!error && femaleHostels) {
-            accessibleHostels = [...new Set(femaleHostels.map((h: { hostel_name: string }) => h.hostel_name))]
+            accessibleHostels = [...new Set(femaleHostels.map((h: { hostel_name: string }) => h.hostel_name).filter(Boolean))] as string[]
         }
     } else {
         // Get all male hostels
@@ -181,7 +187,7 @@ export async function getAdminHostelAccess(
             .eq('female_hostel', false)
 
         if (!error && maleHostels) {
-            accessibleHostels = [...new Set(maleHostels.map((h: { hostel_name: string }) => h.hostel_name))]
+            accessibleHostels = [...new Set(maleHostels.map((h: { hostel_name: string }) => h.hostel_name).filter(Boolean))] as string[]
         }
     }
 
